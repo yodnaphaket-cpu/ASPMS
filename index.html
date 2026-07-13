@@ -1,0 +1,1724 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="ระบบบริหารโครงการบริการวิชาการ คณะวิศวกรรมศาสตร์ (Academic Service Project Management System - ASPMS)">
+  <title>ASPMS - Academic Service Project Management System</title>
+  
+  <!-- Premium Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Chart.js from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <!-- Global Script Error Diagnostic Boundary -->
+  <div id="diagnostic-error-block" style="display:none; background:#fff5f5; border:2px solid #c53030; color:#c53030; padding:15px; margin:20px; border-radius:8px; font-family:monospace; font-size:12px; white-space:pre-wrap; z-index:99999; position:relative;">
+    <h3 style="margin-top:0; color:#c53030;">ระบบพบข้อผิดพลาดในการโหลดไฟล์สคริปต์ (System Load Error):</h3>
+    <div id="diagnostic-error-content" style="margin-top:8px;"></div>
+  </div>
+  <script>
+    window.addEventListener('error', function(e) {
+      // Do not display the red block immediately for non-critical errors (e.g. offline Chart.js loading error).
+      // We will decide whether to display it in the 'load' handler after verifying core files status.
+      var msg = e.message || 'Script resource failed to load (ไม่สามารถดาวน์โหลดไฟล์สคริปต์ได้)';
+      if (msg === 'Script error.') {
+        msg = 'พบข้อผิดพลาดความปลอดภัยเบราว์เซอร์ (Browser Cross-Origin Security Block - ตรวจสอบว่าเปิดไฟล์โดยแตก zip แล้วหรือยัง)';
+      }
+      var filename = e.filename ? e.filename.split('/').pop() : 'ไม่ระบุไฟล์';
+      var lineinfo = e.lineno ? ' บรรทัดที่: ' + e.lineno : '';
+      document.getElementById('diagnostic-error-content').innerText += '\n• ' + msg + ' (ไฟล์: ' + filename + lineinfo + ')';
+    });
+
+    // Check script load status after 500ms
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var dbLoaded = typeof window.ASPMS_DB !== 'undefined' && window.DB_LOADED;
+        var apiLoaded = typeof window.ASPMS_API !== 'undefined' && window.API_LOADED;
+        var appLoaded = typeof window.APP_LOADED !== 'undefined';
+        var chartLoaded = typeof window.Chart !== 'undefined';
+
+        var dbStatus = dbLoaded ? '✅ โหลดสำเร็จ' : '❌ โหลดไม่สำเร็จ (กรุณาเช็กว่ามีไฟล์ db.js ในโฟลเดอร์)';
+        var apiStatus = apiLoaded ? '✅ โหลดสำเร็จ' : '❌ โหลดไม่สำเร็จ (กรุณาเช็กว่ามีไฟล์ api.js ในโฟลเดอร์)';
+        var appStatus = appLoaded ? '✅ โหลดสำเร็จ' : '❌ โหลดไม่สำเร็จ (กรุณาเช็กว่ามีไฟล์ app.js ในโฟลเดอร์)';
+        var chartStatus = chartLoaded ? '✅ โหลดสำเร็จ (Online)' : '⚠️ โหลดไม่สำเร็จ (ออฟไลน์ - ระบบจะข้ามฟังก์ชันกราฟแล้วใช้โหมดออฟไลน์แทน)';
+
+        var hasFail = !dbLoaded || !apiLoaded || !appLoaded;
+
+        // Show diagnostic block only on critical file load failures or execution crashes.
+        // We do NOT show the red banner for a simple offline Chart.js CDN load warning.
+        if (hasFail || window.API_ERROR || window.APP_ERROR) {
+          document.getElementById('diagnostic-error-block').style.display = 'block';
+          
+          // Clear duplicate status divs if any
+          var existingStatus = document.getElementById('diagnostic-status-report');
+          if (existingStatus) existingStatus.remove();
+
+          // Compile error messages if caught inside scripts
+          var errDetails = '';
+          if (window.API_ERROR) {
+            errDetails += '<br><span style="color:#c53030;"><b>• รายละเอียดความเสียหายใน api.js:</b> ' + window.API_ERROR + '</span>';
+          }
+          if (window.APP_ERROR) {
+            errDetails += '<br><span style="color:#c53030;"><b>• รายละเอียดความเสียหายใน app.js:</b> ' + window.APP_ERROR + '</span>';
+          }
+
+          var div = document.createElement('div');
+          div.id = 'diagnostic-status-report';
+          div.style.marginTop = '10px';
+          div.style.borderTop = '1px dashed #c53030';
+          div.style.paddingTop = '10px';
+          div.innerHTML = '<strong>สถานะการเชื่อมต่อสคริปต์ระบบ:</strong><br>' +
+            '• <b>db.js</b>: ' + dbStatus + '<br>' +
+            '• <b>api.js</b>: ' + apiStatus + '<br>' +
+            '• <b>app.js</b>: ' + appStatus + '<br>' +
+            '• <b>Chart.js (CDN)</b>: ' + chartStatus + '<br>' +
+            errDetails + '<br><br>' +
+            '<span style="color:#2d3748;">* <b>คำแนะนำ</b>: หากไฟล์ใดโหลดไม่สำเร็จ ให้ตรวจสอบว่าได้ลากไฟล์สคริปต์ทั้งหมดมาวางในโฟลเดอร์เดียวกันและทำการ <b>"แตกไฟล์ (Extract)"</b> โครงการออกมาจากไฟล์ Zip แล้วก่อนใช้งาน</span>';
+          document.getElementById('diagnostic-error-content').appendChild(div);
+        }
+      }, 500);
+    });
+  </script>
+
+  <!-- ==================== LOGIN VIEW ==================== -->
+  <div id="login-container" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logos" style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 25px; padding: 5px 0;">
+          <img src="images/pim-logo.png" alt="PIM Logo" style="height: 45px; max-width: 160px; object-fit: contain;">
+          <div style="width: 1px; height: 35px; background: rgba(0,0,0,0.15);"></div>
+          <img src="images/et-logo.png" alt="ET Logo" style="height: 45px; max-width: 160px; object-fit: contain;">
+        </div>
+        <h2>ASPMS</h2>
+        <p>Academic Service Project Management System</p>
+        <h3 style="margin-top: 10px;">ระบบบริหารโครงการบริการวิชาการ</h3>
+      </div>
+      <div class="login-alert" id="login-error-msg"></div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-username">ชื่อผู้ใช้งาน (Username)</label>
+          <div class="input-with-icon">
+            <span class="material-icons-round">person</span>
+            <input type="text" id="login-username" class="form-control" placeholder="กรอกชื่อผู้ใช้งาน" required autocomplete="username">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="login-password">รหัสผ่าน (Password)</label>
+          <div class="input-with-icon">
+            <span class="material-icons-round">lock</span>
+            <input type="password" id="login-password" class="form-control" placeholder="กรอกรหัสผ่าน" required autocomplete="current-password">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="btn-login-submit">เข้าสู่ระบบ</button>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- ==================== MAIN APPLICATION SHELL ==================== -->
+  <div id="app-container" class="app-layout" style="display: none;">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <div class="sidebar-brand" style="justify-content: center; padding: 15px;">
+        <div class="brand-text" style="text-align: center;">
+          <h1 style="font-size: 1.5rem; letter-spacing: 1px; margin: 0; color: #ffffff;">ASPMS</h1>
+          <span style="font-size: 0.72rem; opacity: 0.85; display: block; margin-top: 2px; color: #ffffff;">คณะวิศวกรรมศาสตร์และเทคโนโลยี</span>
+        </div>
+      </div>
+      
+      <div class="user-profile-badge">
+        <span class="material-icons-round avatar-icon">account_circle</span>
+        <div class="user-info">
+          <h4 id="user-display-name">ชื่อผู้ใช้งาน</h4>
+          <span id="user-display-role" class="badge">บทบาท</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-menu">
+        <ul>
+          <li>
+            <a href="#" class="menu-link active" data-target="view-dashboard" id="menu-dashboard">
+              <span class="material-icons-round">dashboard</span>
+              <span>แดชบอร์ด</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="menu-link" data-target="view-projects" id="menu-projects">
+              <span class="material-icons-round">assignment</span>
+              <span>รายละเอียดโครงการ</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="menu-link" data-target="view-planning" id="menu-planning">
+              <span class="material-icons-round">calendar_month</span>
+              <span>แผนงานและปฏิทิน</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="menu-link" data-target="view-finance" id="menu-finance">
+              <span class="material-icons-round">payments</span>
+              <span>การเงินโครงการ (รายรับ-รายจ่าย)</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="menu-link" data-target="view-kpi" id="menu-kpi">
+              <span class="material-icons-round">analytics</span>
+              <span>เป้าหมาย KPI</span>
+            </a>
+          </li>
+          <li class="admin-or-dean-only">
+            <a href="#" class="menu-link" data-target="view-reports" id="menu-reports">
+              <span class="material-icons-round">description</span>
+              <span>รายงานผลดำเนินงาน</span>
+            </a>
+          </li>
+          <li class="admin-only">
+            <a href="#" class="menu-link" data-target="view-users" id="menu-users">
+              <span class="material-icons-round">manage_accounts</span>
+              <span>จัดการผู้ใช้งาน</span>
+            </a>
+          </li>
+          <li class="admin-only">
+            <a href="#" class="menu-link" data-target="view-settings" id="menu-settings">
+              <span class="material-icons-round">settings</span>
+              <span>ตั้งค่าระบบ</span>
+            </a>
+          </li>
+          <li class="admin-only">
+            <a href="#" class="menu-link" data-target="view-auditlogs" id="menu-auditlogs">
+              <span class="material-icons-round">history_edu</span>
+              <span>ประวัติการทำงาน (Audit)</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-outline btn-block" id="btn-logout">
+          <span class="material-icons-round">logout</span>
+          <span>ออกจากระบบ</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      
+      <!-- Top Header -->
+      <header class="app-header">
+        <button class="toggle-sidebar-btn" id="btn-toggle-sidebar">
+          <span class="material-icons-round">menu</span>
+        </button>
+        <div class="header-title">
+          <div class="header-brand-row">
+            <svg viewBox="0 0 100 100" class="brand-icon-header" width="42" height="42" style="flex-shrink:0;">
+              <path d="M 50 5 L 92.8 36.1 L 76.5 86.4 L 23.5 86.4 L 7.2 36.1 Z" fill="#ffffff"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#9e1b32" stroke-width="5" stroke-dasharray="5 3"/>
+              <circle cx="50" cy="50" r="24" fill="none" stroke="#9e1b32" stroke-width="2"/>
+              <path d="M 44 42 A 11 11 0 1 0 56 42" fill="none" stroke="#9e1b32" stroke-width="3.5" stroke-linecap="round"/>
+              <line x1="50" y1="33" x2="50" y2="45" stroke="#9e1b32" stroke-width="3.5" stroke-linecap="round"/>
+            </svg>
+            <h2 id="header-page-title">ระบบบริหารโครงการบริการวิชาการ</h2>
+          </div>
+          <div class="header-subtitle">Academic Service Project Management System</div>
+        </div>
+        
+        <div class="header-actions">
+          <!-- Notification Bell -->
+          <div class="notification-dropdown">
+            <button class="header-icon-btn" id="btn-notifications-toggle">
+              <span class="material-icons-round">notifications</span>
+              <span class="notif-badge" id="notifications-count" style="display: none;">0</span>
+            </button>
+            <div class="dropdown-content" id="notifications-dropdown-menu">
+              <div class="dropdown-header">
+                <h4>การแจ้งเตือน</h4>
+                <button class="text-btn" id="btn-mark-all-read">อ่านทั้งหมด</button>
+              </div>
+              <ul class="notification-list" id="notifications-list-container">
+                <!-- Notifications loaded dynamically -->
+              </ul>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Global Filter Bar -->
+      <section class="global-filter-bar no-print">
+        <div class="filter-group">
+          <label for="filter-fiscal-year">ปีงบประมาณ</label>
+          <select id="filter-fiscal-year" class="form-control">
+            <option value="2569" selected>2569</option>
+            <option value="2570">2570</option>
+          </select>
+        </div>
+        <div class="filter-group dept-filter-container">
+          <label for="filter-department">สาขาวิชา</label>
+          <select id="filter-department" class="form-control">
+            <option value="">ทั้งหมดทุกสาขา</option>
+            <!-- Seeded dynamically -->
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-plan-type">ประเภทแผนงาน</label>
+          <select id="filter-plan-type" class="form-control">
+            <option value="">ทั้งหมด</option>
+            <option value="ตามแผน">ตามแผน</option>
+            <option value="นอกแผน">นอกแผน</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btn-apply-filters">
+          <span class="material-icons-round">filter_alt</span> กรองข้อมูล
+        </button>
+        <button class="btn btn-outline" id="btn-reset-filters">รีเซ็ต</button>
+      </section>
+
+      <!-- Main Module Views -->
+      <div class="content-body">
+
+        <!-- ==================== VIEW: DASHBOARD ==================== -->
+        <section id="view-dashboard" class="module-view active">
+          
+          <!-- Faculty KPI Summary cards -->
+          <div class="kpi-grid">
+            <div class="kpi-card blue">
+              <div class="kpi-card-header">
+                <span>จำนวนโครงการทั้งหมด</span>
+                <span class="material-icons-round">assignment</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-projects">0</div>
+              <div class="kpi-card-sub" id="kpi-sub-projects">เป้าหมาย: - โครงการ</div>
+            </div>
+            <div class="kpi-card purple">
+              <div class="kpi-card-header">
+                <span>งบประมาณแผนสะสม</span>
+                <span class="material-icons-round">monetization_on</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-planned-budget">฿0</div>
+              <div class="kpi-card-sub" id="kpi-sub-budget">บรรลุเป้าหมาย: 0%</div>
+            </div>
+            <div class="kpi-card green">
+              <div class="kpi-card-header">
+                <span>รายรับจริง (Revenue)</span>
+                <span class="material-icons-round">account_balance_wallet</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-revenue">฿0</div>
+              <div class="kpi-card-sub" id="kpi-sub-revenue">บรรลุเป้าหมาย: 0%</div>
+            </div>
+            <div class="kpi-card orange">
+              <div class="kpi-card-header">
+                <span>รายจ่ายจริง (Expense)</span>
+                <span class="material-icons-round">shopping_cart</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-expense">฿0</div>
+              <div class="kpi-card-sub" id="kpi-sub-expense">คงเหลือเทียบแผน: 0%</div>
+            </div>
+            <div class="kpi-card green">
+              <div class="kpi-card-header">
+                <span>กำไร (Profit)</span>
+                <span class="material-icons-round">trending_up</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-profit">฿0</div>
+              <div class="kpi-card-sub" id="kpi-sub-profit">บรรลุเป้าหมาย: 0%</div>
+            </div>
+            <div class="kpi-card cyan">
+              <div class="kpi-card-header">
+                <span>อัตรากำไรขั้นต้น (%GP)</span>
+                <span class="material-icons-round">percent</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-gp">0%</div>
+              <div class="kpi-card-sub">เป้าหมายขั้นต่ำ: 20%</div>
+            </div>
+            <div class="kpi-card pink">
+              <div class="kpi-card-header">
+                <span>งบประมาณเพื่อสังคม / CSR (ให้เปล่า)</span>
+                <span class="material-icons-round">volunteer_activism</span>
+              </div>
+              <div class="kpi-card-value" id="kpi-total-csr">฿0</div>
+              <div class="kpi-card-sub">รายจ่ายโครงการบริการสังคมสะสม</div>
+            </div>
+          </div>
+
+          <!-- Status Breakdown Sub-grid -->
+          <div class="status-grid">
+            <div class="status-card completed">
+              <span class="status-num" id="status-completed-count">0</span>
+              <span class="status-label">ดำเนินการเสร็จสิ้น</span>
+            </div>
+            <div class="status-card running">
+              <span class="status-num" id="status-running-count">0</span>
+              <span class="status-label">กำลังดำเนินการ</span>
+            </div>
+            <div class="status-card delayed">
+              <span class="status-num" id="status-delayed-count">0</span>
+              <span class="status-label">โครงการล่าช้า</span>
+            </div>
+            <div class="status-card cancelled">
+              <span class="status-num" id="status-cancelled-count">0</span>
+              <span class="status-label">ยกเลิกโครงการ</span>
+            </div>
+          </div>
+
+          <!-- Charts section -->
+          <div class="dashboard-charts-row">
+            <div class="chart-card">
+              <h3>ผลการดำเนินงานทางการเงิน (งบแผน vs รายรับจริง vs กำไร)</h3>
+              <div class="chart-container">
+                <canvas id="chart-plan-vs-actual"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <h3>สัดส่วนสถานะโครงการทั้งหมด</h3>
+              <div class="chart-container small-chart">
+                <canvas id="chart-project-status"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-charts-row">
+            <div class="chart-card full-width">
+              <h3>เปรียบเทียบผลงานการบริการวิชาการรายสาขาวิชา</h3>
+              <div class="chart-container">
+                <canvas id="chart-department-comparison"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Department Summary Table (Faculty Level) / Project Summary Table (Dept Level) -->
+          <div class="card table-card" id="dashboard-details-card">
+            <div class="card-header">
+              <h3 id="dashboard-table-title">ตารางสรุปผลงานระดับสาขาวิชา</h3>
+              <div class="header-actions" id="dashboard-table-actions">
+                <!-- Admin shortcut buttons -->
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table" id="dashboard-details-table">
+                <thead>
+                  <!-- Rendered dynamically -->
+                </thead>
+                <tbody>
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Schedule Alerts & Notifications Section -->
+          <div class="dashboard-schedule-section" style="margin-top: 20px;">
+            <h3 style="margin-bottom: 12px; color: var(--primary); font-weight: 700; font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+              <span class="material-icons-round" style="color: var(--primary);">event_note</span> กำหนดการและสถานะเวลาดำเนินงานโครงการ
+            </h3>
+            
+            <!-- Quick Alert Cards -->
+            <div class="schedule-alert-grid">
+              <div class="schedule-alert-card active" id="alert-card-today" data-type="today">
+                <div class="alert-icon color-yellow"><span class="material-icons-round">event</span></div>
+                <div class="alert-content">
+                  <span class="alert-title">ดำเนินการวันนี้</span>
+                  <span class="alert-val" id="alert-val-today">0</span>
+                </div>
+              </div>
+              
+              <div class="schedule-alert-card" id="alert-card-upcoming" data-type="upcoming">
+                <div class="alert-icon color-blue"><span class="material-icons-round">update</span></div>
+                <div class="alert-content">
+                  <span class="alert-title">ใกล้จะเริ่ม (เร็วๆ นี้)</span>
+                  <span class="alert-val" id="alert-val-upcoming">0</span>
+                </div>
+              </div>
+
+              <div class="schedule-alert-card" id="alert-card-startweek" data-type="start-week">
+                <div class="alert-icon color-cyan"><span class="material-icons-round">calendar_today</span></div>
+                <div class="alert-content">
+                  <span class="alert-title">เริ่มสัปดาห์นี้</span>
+                  <span class="alert-val" id="alert-val-startweek">0</span>
+                </div>
+              </div>
+
+              <div class="schedule-alert-card" id="alert-card-endweek" data-type="end-week">
+                <div class="alert-icon color-orange"><span class="material-icons-round">event_busy</span></div>
+                <div class="alert-content">
+                  <span class="alert-title">สิ้นสุดสัปดาห์นี้</span>
+                  <span class="alert-val" id="alert-val-endweek">0</span>
+                </div>
+              </div>
+
+              <div class="schedule-alert-card" id="alert-card-overdue" data-type="overdue">
+                <div class="alert-icon color-red"><span class="material-icons-round">warning</span></div>
+                <div class="alert-content">
+                  <span class="alert-title">ล่าช้า/เกินกำหนด</span>
+                  <span class="alert-val" id="alert-val-overdue">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- List container for the active selection -->
+            <div class="card table-card" style="margin-top: 15px;">
+              <div class="card-header" style="padding: 10px 15px; background: #fff; border-bottom: 1px solid var(--border-color);">
+                <h4 id="schedule-list-title" style="font-weight: 600; font-size: 0.95rem; color: var(--primary);">รายชื่อโครงการ: ดำเนินการวันนี้</h4>
+              </div>
+              <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                <table class="table table-sm" style="font-size: 0.85rem; margin-bottom: 0;">
+                  <thead>
+                    <tr style="background-color: var(--bg-light);">
+                      <th>รหัสโครงการ</th>
+                      <th>ชื่อโครงการ</th>
+                      <th>สาขาวิชา</th>
+                      <th>ผู้รับผิดชอบ</th>
+                      <th>วันที่เริ่ม - สิ้นสุด</th>
+                      <th>สถานะ</th>
+                      <th class="no-print">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="schedule-list-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: PROJECTS ==================== -->
+        <section id="view-projects" class="module-view">
+          <div class="view-header">
+            <h3>รายการโครงการบริการวิชาการ</h3>
+            <div class="header-buttons no-print">
+              <button class="btn btn-primary" id="btn-add-project-modal">
+                <span class="material-icons-round">add</span> เพิ่มโครงการใหม่
+              </button>
+              <button class="btn btn-outline" id="btn-export-projects-csv">
+                <span class="material-icons-round">file_download</span> ส่งออก Excel
+              </button>
+            </div>
+          </div>
+
+          <!-- Search Filter row -->
+          <div class="search-filter-card card no-print">
+            <div class="form-row">
+              <div class="form-group flex-grow">
+                <input type="text" id="project-search-query" class="form-control" placeholder="ค้นหาด้วย รหัสโครงการ, ชื่อโครงการ, ผู้รับผิดชอบ หรือหน่วยงานจ้าง...">
+              </div>
+              <div class="form-group">
+                <select id="project-filter-status" class="form-control">
+                  <option value="">สถานะทั้งหมด</option>
+                  <option value="Draft">Draft (แบบร่าง)</option>
+                  <option value="Planned">Planned (วางแผน)</option>
+                  <option value="In Progress">In Progress (กำลังดำเนินงาน)</option>
+                  <option value="Completed">Completed (เสร็จสิ้น)</option>
+                  <option value="Delayed">Delayed (ล่าช้า)</option>
+                  <option value="Cancelled">Cancelled (ยกเลิก)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <select id="project-filter-type" class="form-control">
+                  <option value="">ประเภททั้งหมด</option>
+                  <option value="อบรม">อบรม</option>
+                  <option value="จ้างทำของ">จ้างทำของ</option>
+                  <option value="รับแปล">รับแปล</option>
+                  <option value="ที่ปรึกษา">ที่ปรึกษา</option>
+                  <option value="ทดสอบ/วิเคราะห์">ทดสอบ/วิเคราะห์</option>
+                  <option value="พัฒนาระบบ">พัฒนาระบบ</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" id="btn-search-projects">ค้นหา</button>
+            </div>
+          </div>
+
+          <!-- Projects Table Grid -->
+          <div class="card table-card">
+            <div class="table-responsive">
+              <table class="table" id="projects-table">
+                <thead>
+                  <tr>
+                    <th>รหัสโครงการ</th>
+                    <th>ชื่อโครงการ</th>
+                    <th>สาขาวิชา</th>
+                    <th>ปีงบฯ</th>
+                    <th>ผู้รับผิดชอบ</th>
+                    <th>วันที่เริ่มต้น-สิ้นสุด</th>
+                    <th>งบวางแผน</th>
+                    <th>รายรับจริง</th>
+                    <th>รายจ่ายจริง</th>
+                    <th>กำไร</th>
+                    <th>%GP</th>
+                    <th>สถานะ</th>
+                    <th class="no-print">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="projects-table-body">
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: FINANCE ==================== -->
+        <section id="view-finance" class="module-view">
+          <div class="view-header">
+            <h3>การเงินโครงการ (รายรับ - รายจ่าย)</h3>
+            <div class="header-buttons no-print">
+              <button class="btn btn-success" id="btn-add-revenue-modal">
+                <span class="material-icons-round">add_circle</span> บันทึกรายรับ
+              </button>
+              <button class="btn btn-danger" id="btn-add-expense-modal">
+                <span class="material-icons-round">remove_circle</span> บันทึกรายจ่าย
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabs header -->
+          <div class="tab-container no-print">
+            <button class="tab-btn active" data-tab="tab-revenue">บันทึกรายรับ (Revenue)</button>
+            <button class="tab-btn" data-tab="tab-expense">บันทึกรายจ่าย (Expense)</button>
+          </div>
+
+          <!-- Tab Contents: Revenue -->
+          <div id="tab-revenue" class="tab-content active">
+            <div class="card table-card">
+              <div class="card-header">
+                <h3>รายการรับเงิน (Revenue Transactions)</h3>
+                <button class="btn btn-outline btn-sm" id="btn-export-revenue-csv">ส่งออก CSV</button>
+              </div>
+              <div class="table-responsive">
+                <table class="table" id="table-revenue-tx">
+                  <thead>
+                    <tr>
+                      <th>วันที่</th>
+                      <th>เลขที่ใบเสร็จ</th>
+                      <th>รหัสโครงการ</th>
+                      <th>ประเภทรายรับ</th>
+                      <th>รายละเอียด</th>
+                      <th>จำนวนเงิน</th>
+                      <th>ผู้บันทึก</th>
+                      <th class="no-print">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-revenue-body">
+                    <!-- Dynamic -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Contents: Expense -->
+          <div id="tab-expense" class="tab-content">
+            <div class="card table-card">
+              <div class="card-header">
+                <h3>รายการจ่ายเงิน (Expense Transactions)</h3>
+                <button class="btn btn-outline btn-sm" id="btn-export-expense-csv">ส่งออก CSV</button>
+              </div>
+              <div class="table-responsive">
+                <table class="table" id="table-expense-tx">
+                  <thead>
+                    <tr>
+                      <th>วันที่</th>
+                      <th>เลขที่ใบสั่งจ่าย</th>
+                      <th>รหัสโครงการ</th>
+                      <th>หมวดหมู่รายจ่าย</th>
+                      <th>รายละเอียด</th>
+                      <th>จำนวนเงิน</th>
+                      <th>ผู้บันทึก</th>
+                      <th class="no-print">การจัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-expense-body">
+                    <!-- Dynamic -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: KPI PLAN ==================== -->
+        <section id="view-kpi" class="module-view">
+          <div class="view-header">
+            <h3>แผนและเป้าหมาย KPI ประจำปี</h3>
+            <div class="header-buttons admin-only no-print">
+              <button class="btn btn-primary" id="btn-edit-kpi-targets">
+                <span class="material-icons-round">edit</span> ปรับแต่งเป้าหมาย KPI
+              </button>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-header">
+              <h3 id="kpi-table-title">เป้าหมายเปรียบเทียบกับยอดดำเนินงานจริง (ปีงบประมาณ 2569)</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="table" id="kpi-targets-table">
+                <thead>
+                  <tr>
+                    <th>สาขาวิชา</th>
+                    <th>เป้าหมายโครงการ</th>
+                    <th>ผลงานจริง</th>
+                    <th>เป้าหมายงบประมาณ</th>
+                    <th>งบจริงที่เกิดขึ้น</th>
+                    <th>เป้าหมายรายรับ</th>
+                    <th>รายรับจริง</th>
+                    <th>เป้าหมายกำไร</th>
+                    <th>กำไรจริง</th>
+                    <th>บรรลุเป้าหมาย %</th>
+                  </tr>
+                </thead>
+                <tbody id="kpi-targets-body">
+                  <!-- Dynamic content -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Department Specific Projects List (only visible when a department is selected) -->
+          <div class="card table-card" id="kpi-projects-card" style="display: none; margin-top: 24px;">
+            <div class="card-header">
+              <h3 id="kpi-projects-title">รายชื่อโครงการบริการวิชาการ</h3>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>รหัสโครงการ</th>
+                    <th>ชื่อโครงการ</th>
+                    <th>ผู้รับผิดชอบ</th>
+                    <th>งบประมาณแผน</th>
+                    <th>รายรับสะสม</th>
+                    <th>รายจ่ายสะสม</th>
+                    <th>กำไร</th>
+                    <th>%GP</th>
+                    <th>สถานะ</th>
+                    <th class="no-print">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="kpi-projects-body">
+                  <!-- Dynamic content -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: PLANNING & SCHEDULE ==================== -->
+        <section id="view-planning" class="module-view">
+          <div class="view-header no-print">
+            <h3>การวางแผนและกำหนดการดำเนินโครงการ</h3>
+            <div class="header-buttons">
+              <button class="btn btn-outline btn-sm" id="btn-export-planning-pdf">
+                <span class="material-icons-round">picture_as_pdf</span> ส่งออก PDF
+              </button>
+              <button class="btn btn-outline btn-sm" id="btn-export-planning-excel">
+                <span class="material-icons-round">file_download</span> ส่งออก Excel
+              </button>
+              <button class="btn btn-primary btn-sm" id="btn-print-planning">
+                <span class="material-icons-round">print</span> สั่งพิมพ์
+              </button>
+            </div>
+          </div>
+
+          <!-- View Toggle Buttons & Filters -->
+          <div class="search-filter-card card no-print" style="margin-bottom: 15px; padding: 15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px; border-bottom:1px solid var(--border-color); padding-bottom:10px;">
+              <!-- View Mode Tabs -->
+              <div class="detail-tab-row" style="margin-bottom:0; border:none; padding:0;">
+                <button class="detail-tab-btn active" id="btn-tab-gantt" style="padding: 6px 16px;">Gantt Chart View</button>
+                <button class="detail-tab-btn" id="btn-tab-calendar" style="padding: 6px 16px;">Calendar View</button>
+              </div>
+              
+              <!-- Gantt Timeline Scales (only visible when Gantt is active) -->
+              <div id="gantt-scale-controls" style="display:flex; gap:6px; align-items:center;">
+                <span style="font-size:0.85rem; color:var(--text-muted);">ช่วงสเกลเวลา:</span>
+                <select id="planning-gantt-scale" class="form-control form-control-sm" style="width:110px; padding: 3px 8px; height: 32px;">
+                  <option value="daily">รายวัน</option>
+                  <option value="weekly">รายสัปดาห์</option>
+                  <option value="monthly" selected>รายเดือน</option>
+                  <option value="quarterly">รายไตรมาส</option>
+                  <option value="yearly">รายปี</option>
+                </select>
+                <button class="btn btn-icon-only" id="btn-gantt-zoom-in" title="ซูมเข้า" style="width: 32px; height: 32px; min-width: 32px;"><span class="material-icons-round" style="font-size:1.2rem;">zoom_in</span></button>
+                <button class="btn btn-icon-only" id="btn-gantt-zoom-out" title="ซูมออก" style="width: 32px; height: 32px; min-width: 32px;"><span class="material-icons-round" style="font-size:1.2rem;">zoom_out</span></button>
+              </div>
+
+              <!-- Calendar Mode Buttons (only visible when Calendar is active) -->
+              <div id="calendar-mode-controls" style="display:none; gap:6px; align-items:center;">
+                <span style="font-size:0.85rem; color:var(--text-muted);">มุมมองปฏิทิน:</span>
+                <div class="btn-group" style="display:inline-flex; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; height:32px;">
+                  <button class="btn btn-light btn-sm calendar-mode-btn" data-mode="year" style="border:none; border-radius:0; padding:0 12px; height:100%;">รายปี</button>
+                  <button class="btn btn-light btn-sm calendar-mode-btn active" data-mode="month" style="border:none; border-radius:0; padding:0 12px; height:100%;">รายเดือน</button>
+                  <button class="btn btn-light btn-sm calendar-mode-btn" data-mode="week" style="border:none; border-radius:0; padding:0 12px; height:100%;">รายสัปดาห์</button>
+                  <button class="btn btn-light btn-sm calendar-mode-btn" data-mode="day" style="border:none; border-radius:0; padding:0 12px; height:100%;">รายวัน</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic Filters -->
+            <div class="form-row" style="gap:10px;">
+              <div class="form-group" style="flex:1; min-width: 140px;">
+                <label style="font-size:0.75rem; margin-bottom: 2px;">สาขาวิชา</label>
+                <select id="planning-filter-dept" class="form-control form-control-sm"></select>
+              </div>
+              <div class="form-group" style="flex:1; min-width: 120px;">
+                <label style="font-size:0.75rem; margin-bottom: 2px;">สถานะโครงการ</label>
+                <select id="planning-filter-status" class="form-control form-control-sm">
+                  <option value="">-- ทั้งหมด --</option>
+                  <option value="Planned">Planned (วางแผน)</option>
+                  <option value="In Progress">In Progress (กำลังดำเนินการ)</option>
+                  <option value="Completed">Completed (เสร็จสิ้น)</option>
+                  <option value="Delayed">Delayed (ล่าช้า)</option>
+                  <option value="Cancelled">Cancelled (ยกเลิก)</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1.5; min-width: 160px;">
+                <label style="font-size:0.75rem; margin-bottom: 2px;">อาจารย์ผู้รับผิดชอบ</label>
+                <select id="planning-filter-responsible" class="form-control form-control-sm">
+                  <option value="">-- ทั้งหมด --</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1.5; min-width: 160px;">
+                <label style="font-size:0.75rem; margin-bottom: 2px;">ค้นหาโครงการ</label>
+                <input type="text" id="planning-search" class="form-control form-control-sm" placeholder="รหัส หรือชื่อโครงการ...">
+              </div>
+            </div>
+          </div>
+
+          <!-- GANTT CONTAINER PANEL -->
+          <div class="card" id="planning-gantt-panel" style="padding: 15px; overflow-x: auto; background: #fff;">
+            <!-- Single Project Back Button -->
+            <div id="gantt-single-project-back" style="display:none; margin-bottom:12px;">
+              <button class="btn btn-outline btn-xs" id="btn-gantt-back-all">
+                <span class="material-icons-round" style="font-size:1rem; vertical-align:middle; margin-right:4px;">arrow_back</span> กลับไปมุมมองรวมทั้งหมด
+              </button>
+            </div>
+            
+            <div class="gantt-wrapper" style="position:relative; border: 1px solid var(--border-color); border-radius: 6px; overflow-x: auto;">
+              <div id="gantt-container" style="min-width: 100%; position:relative;">
+                <!-- Gantt grid and bars rendered by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- CALENDAR CONTAINER PANEL -->
+          <div class="card" id="planning-calendar-panel" style="padding: 15px; display:none; background: #fff;">
+            <!-- Calendar Navigation Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;" id="calendar-navigation-header">
+              <button class="btn btn-outline btn-xs" id="btn-calendar-prev" style="min-width: 32px; padding: 4px;"><span class="material-icons-round">chevron_left</span></button>
+              <h4 id="planning-calendar-title" style="font-weight:700; color:var(--primary); margin:0;">มิถุนายน 2569</h4>
+              <button class="btn btn-outline btn-xs" id="btn-calendar-next" style="min-width: 32px; padding: 4px;"><span class="material-icons-round">chevron_right</span></button>
+            </div>
+            
+            <!-- Calendar grid wrapper -->
+            <div id="calendar-grid-wrapper">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: REPORTS ==================== -->
+        <section id="view-reports" class="module-view">
+          <div class="view-header no-print">
+            <h3>ระบบรายงานผลดำเนินงานระดับคณะ</h3>
+            <div class="header-buttons">
+              <button class="btn btn-primary" id="btn-print-report">
+                <span class="material-icons-round">print</span> สั่งพิมพ์รายงาน (PDF)
+              </button>
+              <button class="btn btn-outline" id="btn-export-report-excel">
+                <span class="material-icons-round">download</span> ดาวน์โหลดตาราง Excel
+              </button>
+            </div>
+          </div>
+
+          <!-- Report Page Layout (Print friendly) -->
+          <div class="report-document" id="report-print-container">
+            <div class="report-doc-header">
+              <h2>รายงานผลดำเนินงานและการบริหารการเงินโครงการบริการวิชาการ</h2>
+              <h3 id="report-subtitle-dept-text" style="margin-top: 5px; margin-bottom: 5px; color: #800000; font-weight: 600; display: none;"></h3>
+              <h3>คณะวิศวกรรมศาสตร์และเทคโนโลยี สถาบันการจัดการปัญญาภิวัฒน์</h3>
+              <p id="report-meta-text">ประจำปีงบประมาณ 2569 | ข้อมูล ณ วันที่ 3 กรกฎาคม 2569</p>
+            </div>
+
+            <div class="report-stats-grid">
+              <div class="report-stat-box">
+                <span class="report-stat-label">โครงการทั้งหมด</span>
+                <span class="report-stat-val" id="rep-stat-projects">0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="report-stat-label">งบประมาณตามแผน</span>
+                <span class="report-stat-val" id="rep-stat-budget">฿0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="report-stat-label">รายรับสะสม</span>
+                <span class="report-stat-val text-success" id="rep-stat-revenue">฿0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="report-stat-label">รายจ่ายสะสม</span>
+                <span class="report-stat-val text-danger" id="rep-stat-expense">฿0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="report-stat-label">กำไรสะสม</span>
+                <span class="report-stat-val text-primary" id="rep-stat-profit">฿0</span>
+              </div>
+              <div class="report-stat-box">
+                <span class="report-stat-label">อัตรากำไรเฉลี่ย (%GP)</span>
+                <span class="report-stat-val" id="rep-stat-gp">0%</span>
+              </div>
+            </div>
+
+            <!-- Monthly Performance Section -->
+            <div class="report-monthly-section" style="margin-top: 30px; margin-bottom: 30px;">
+              <h4 style="color: var(--primary); font-weight: 600; margin-bottom: 15px; border-bottom: 2px solid var(--primary); padding-bottom: 5px;">รายงานประสิทธิภาพผลการดำเนินงานทางการเงินจำแนกรายเดือน</h4>
+              
+              <!-- Monthly Trend Chart Container -->
+              <div class="report-chart-container no-print-chart" style="background: white; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 15px; margin-bottom: 20px; max-height: 320px;">
+                <canvas id="chart-report-monthly-trend" style="max-height: 290px; width: 100%;"></canvas>
+              </div>
+
+              <!-- Monthly Summary Table -->
+              <table class="report-table" id="report-monthly-table" style="margin-bottom: 30px;">
+                <thead>
+                  <tr>
+                    <th>เดือน</th>
+                    <th class="text-center">จำนวนโครงการที่ดำเนินงาน (Active)</th>
+                    <th>รายรับประจำเดือน (Revenue)</th>
+                    <th>รายจ่ายประจำเดือน (Expense)</th>
+                    <th>กำไรสุทธิ (Profit)</th>
+                    <th>อัตรากำไรขั้นต้น (%GP)</th>
+                    <th>รายจ่ายเพื่อสังคม (CSR)</th>
+                  </tr>
+                </thead>
+                <tbody id="report-monthly-body">
+                  <!-- Generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+
+            <div class="report-table-section">
+              <h4>บัญชีรายละเอียดโครงการบริการวิชาการและการเงินจำแนกตามรายโครงการ</h4>
+              <table class="report-table" id="report-details-table">
+                <thead>
+                  <tr>
+                    <th>รหัสโครงการ</th>
+                    <th>ชื่อโครงการ</th>
+                    <th>สาขาวิชา</th>
+                    <th>ผู้รับผิดชอบ</th>
+                    <th>สถานะ</th>
+                    <th>งบประมาณวางแผน</th>
+                    <th>รายรับ</th>
+                    <th>รายจ่าย</th>
+                    <th>กำไร</th>
+                    <th>%GP</th>
+                  </tr>
+                </thead>
+                <tbody id="report-details-body">
+                  <!-- Generated dynamically -->
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="report-signature">
+              <div class="sig-line" id="sig-adean-container">
+                <p>ลงชื่อ............................................................</p>
+                <p id="sig-adean-name">(รศ.ดร.วิโรจน์ เจริญสุข)</p>
+                <p>ผู้ช่วยคณบดีฝ่ายวิชาการและวิจัย</p>
+              </div>
+              <div class="sig-line" id="sig-admin-container">
+                <p>ลงชื่อ............................................................</p>
+                <p id="sig-admin-name">(อาจารย์ผู้รับผิดชอบ/แอดมินสาขา)</p>
+                <p id="sig-admin-role">หัวหน้าสาขาวิชา</p>
+              </div>
+              <div class="sig-line" id="sig-dean-container">
+                <p>ลงชื่อ............................................................</p>
+                <p id="sig-dean-name">(ศ.ดร.สมชาย ทรงวุฒิ)</p>
+                <p>คณบดีคณะวิศวกรรมศาสตร์และเทคโนโลยี</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: USERS ==================== -->
+        <section id="view-users" class="module-view">
+          <div class="view-header">
+            <h3>จัดการผู้ใช้งานระบบ</h3>
+            <button class="btn btn-primary" id="btn-add-user-modal">
+              <span class="material-icons-round">person_add</span> เพิ่มผู้ใช้งานใหม่
+            </button>
+          </div>
+
+          <div class="card table-card">
+            <div class="table-responsive">
+              <table class="table" id="users-table">
+                <thead>
+                  <tr>
+                    <th>รหัสพนักงาน</th>
+                    <th>ชื่อ-นามสกุล</th>
+                    <th>ชื่อผู้ใช้</th>
+                    <th>สาขาวิชา</th>
+                    <th>อีเมล</th>
+                    <th>เบอร์โทรศัพท์</th>
+                    <th>บทบาทสิทธิ์</th>
+                    <th>สถานะ</th>
+                    <th>การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table-body">
+                  <!-- Dynamic -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: SETTINGS ==================== -->
+        <section id="view-settings" class="module-view">
+          <div class="view-header">
+            <h3>การตั้งค่าคอนฟิกระบบ</h3>
+          </div>
+
+          <div class="settings-grid">
+            <div class="card settings-card">
+              <div class="card-header">
+                <h3>ตั้งค่าข้อมูลพื้นฐานคณะและสาขาวิชา</h3>
+              </div>
+              <div class="card-body">
+                <p>ข้อมูลสาขาวิชาที่รองรับการบริหารโครงการในปัจจุบัน (8 สาขาวิชา):</p>
+                <ul class="dept-badge-list">
+                  <li><span class="badge badge-crimson">AME</span> Automotive Engineering</li>
+                  <li><span class="badge badge-crimson">CAI</span> Computer Artificial Intelligence</li>
+                  <li><span class="badge badge-crimson">IEM</span> Industrial Engineering</li>
+                  <li><span class="badge badge-crimson">DIT</span> Digital Information Technology</li>
+                  <li><span class="badge badge-crimson">RAE</span> Robotics and Automation</li>
+                  <li><span class="badge badge-crimson">CYB</span> Cyber Security Engineering</li>
+                  <li><span class="badge badge-crimson">MAI</span> Mechanical and AI</li>
+                  <li><span class="badge badge-crimson">ET</span> Engineering Technology</li>
+                </ul>
+                <div class="form-group margin-top-20">
+                  <label for="settings-sys-name">ชื่อของระบบ</label>
+                  <input type="text" id="settings-sys-name" class="form-control" value="Academic Service Project Management System (ASPMS)" disabled>
+                </div>
+              </div>
+            </div>
+
+            <div class="card settings-card">
+              <div class="card-header">
+                <h3>ขีดจำกัดงบประมาณและการเงิน</h3>
+              </div>
+              <div class="card-body">
+                <div class="form-group">
+                  <label for="settings-min-gp">อัตรากำไรขั้นต้นเป้าหมายขั้นต่ำของคณะ (%GP)</label>
+                  <input type="number" id="settings-min-gp" class="form-control" value="20">
+                </div>
+                <div class="form-group">
+                  <label for="settings-fiscal-year">ปีงบประมาณใช้งานหลัก</label>
+                  <select id="settings-fiscal-year" class="form-control">
+                    <option value="2569" selected>2569</option>
+                    <option value="2570">2570</option>
+                  </select>
+                </div>
+                <button class="btn btn-primary" id="btn-save-settings">บันทึกข้อมูลตั้งค่า</button>
+              </div>
+            </div>
+
+            <!-- New: Backup & Restore Settings Card -->
+            <div class="card settings-card">
+              <div class="card-header">
+                <h3>สำรองและกู้คืนฐานข้อมูล (Backup & Restore)</h3>
+              </div>
+              <div class="card-body">
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:15px;">
+                  เนื่องจากระบบเก็บข้อมูลจำลองบนเบราว์เซอร์ของแต่ละเครื่อง หากท่านต้องการส่งไฟล์ไปให้ผู้อื่นทำงานต่อ ให้กดส่งออกไฟล์สำรองข้อมูล (.json) นี้ไปพร้อมกับไฟล์ซิป เพื่อให้เพื่อนร่วมงานนำไปอิมพอร์ต และอิมพอร์ตกลับเมื่อทำงานเสร็จ
+                </p>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                  <button class="btn btn-outline btn-sm" id="btn-settings-export-db" style="flex:1; min-width:140px; display:inline-flex; align-items:center; justify-content:center; gap:5px; height:36px;">
+                    <span class="material-icons-round" style="font-size:1.1rem;">cloud_download</span>ส่งออกฐานข้อมูล (.json)
+                  </button>
+                  <button class="btn btn-outline btn-sm" id="btn-settings-import-trigger" style="flex:1; min-width:140px; display:inline-flex; align-items:center; justify-content:center; gap:5px; height:36px;">
+                    <span class="material-icons-round" style="font-size:1.1rem;">cloud_upload</span>นำเข้าฐานข้อมูล (.json)
+                  </button>
+                  <input type="file" id="settings-import-db-file" accept=".json" style="display:none;">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== VIEW: AUDIT LOGS ==================== -->
+        <section id="view-auditlogs" class="module-view">
+          <div class="view-header">
+            <h3>ประวัติการทำงานในระบบ (Immutable Audit Logs)</h3>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-outline" id="btn-refresh-auditlogs">รีเซ็ต/อัปเดตประวัติ</button>
+              <button class="btn btn-outline text-danger" id="btn-clear-auditlogs">ล้างประวัติทั้งหมด</button>
+            </div>
+          </div>
+          
+          <div class="card table-card">
+            <div class="table-responsive">
+              <table class="table" id="audit-table">
+                <thead>
+                  <tr>
+                    <th>วัน-เวลา</th>
+                    <th>ผู้ใช้งาน</th>
+                    <th>บทบาท</th>
+                    <th>โมดูล</th>
+                    <th>การกระทำ</th>
+                    <th>รหัสรายการคีย์</th>
+                    <th>ค่าข้อมูลเดิม (Old Value)</th>
+                    <th>ค่าข้อมูลใหม่ (New Value)</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-table-body">
+                  <!-- Dynamic -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ==================== MODALS & FORMS ==================== -->
+
+  <!-- MODAL: ADD/EDIT PROJECT -->
+  <div class="modal" id="modal-project">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-project-title">เพิ่มโครงการบริการวิชาการใหม่</h3>
+          <span class="close-btn material-icons-round" id="btn-close-project-modal">close</span>
+        </div>
+        <form id="project-form">
+          <input type="hidden" id="project-form-id">
+          <div class="modal-body" style="max-height: 55vh; overflow-y: auto;">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="project-form-code">รหัสโครงการ (Project Code)</label>
+                <input type="text" id="project-form-code" class="form-control" placeholder="ปล่อยว่างเพื่อสร้างอัตโนมัติ (เช่น ASP-2569-RAE-001)">
+              </div>
+              <div class="form-group">
+                <label for="project-form-fy">ปีงบประมาณ <span class="required">*</span></label>
+                <select id="project-form-fy" class="form-control" required>
+                  <option value="2569" selected>2569</option>
+                  <option value="2570">2570</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="project-form-name">ชื่อโครงการ <span class="required">*</span></label>
+              <input type="text" id="project-form-name" class="form-control" required placeholder="เช่น โครงการจัดอบรมหุ่นยนต์อัจฉริยะ">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="project-form-dept">สาขาวิชาผู้รับผิดชอบ <span class="required">*</span></label>
+                <select id="project-form-dept" class="form-control" required>
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="project-form-type">ประเภทโครงการ <span class="required">*</span></label>
+                <select id="project-form-type" class="form-control" required>
+                  <option value="อบรม" selected>อบรม</option>
+                  <option value="จ้างทำของ">จ้างทำของ</option>
+                  <option value="รับแปล">รับแปล</option>
+                  <option value="ที่ปรึกษา">ที่ปรึกษา</option>
+                  <option value="ทดสอบ/วิเคราะห์">ทดสอบ/วิเคราะห์</option>
+                  <option value="พัฒนาระบบ">พัฒนาระบบ</option>
+                  <option value="อื่น ๆ">อื่น ๆ</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label>ประเภทแผนงาน <span class="required">*</span></label>
+                <div class="radio-group" style="display: flex; gap: 20px; align-items: center; height: 42px;">
+                  <label style="font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <input type="radio" name="project-form-plan-type" value="ตามแผน" checked style="width: auto;"> ตามแผน
+                  </label>
+                  <label style="font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <input type="radio" name="project-form-plan-type" value="นอกแผน" style="width: auto;"> นอกแผน
+                  </label>
+                </div>
+              </div>
+              <div class="form-group" style="display: flex; align-items: center; height: 70px;">
+                <label style="font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 10px; margin-top: 25px;">
+                  <input type="checkbox" id="project-form-free-service" style="width: 20px; height: 20px;"> โครงการบริการวิชาการแบบให้เปล่า (ไม่มีรายรับ)
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="project-form-customer">หน่วยงานผู้ว่าจ้าง / ลูกค้า</label>
+                <input type="text" id="project-form-customer" class="form-control" placeholder="เช่น สมาคมอุตสาหกรรม หรือ CP ALL">
+              </div>
+              <div class="form-group">
+                <label for="project-form-responsible">อาจารย์ผู้รับผิดชอบโครงการ <span class="required">*</span></label>
+                <input type="text" id="project-form-responsible" class="form-control" required placeholder="เช่น ดร.ภาคภูมิ">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="project-form-start">วันที่เริ่มต้นโครงการ <span class="required">*</span></label>
+                <input type="date" id="project-form-start" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label for="project-form-end">วันที่สิ้นสุดโครงการ <span class="required">*</span></label>
+                <input type="date" id="project-form-end" class="form-control" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="project-form-budget">งบประมาณวางแผนสะสม (Planned Budget) <span class="required">*</span></label>
+                <input type="number" id="project-form-budget" class="form-control" required placeholder="เช่น 150000" min="0">
+              </div>
+              <div class="form-group" id="project-form-status-group" style="display:none;">
+                <label for="project-form-status">สถานะโครงการ</label>
+                <select id="project-form-status" class="form-control">
+                  <option value="Draft">Draft (แบบร่าง)</option>
+                  <option value="Planned">Planned (วางแผน)</option>
+                  <option value="In Progress">In Progress (กำลังดำเนินงาน)</option>
+                  <option value="Completed">Completed (เสร็จสิ้น)</option>
+                  <option value="Delayed">Delayed (ล่าช้า)</option>
+                  <option value="Cancelled">Cancelled (ยกเลิก)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Dynamic Training Batches Section -->
+            <div id="project-batches-container" style="margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+              <label style="font-weight: 600; display: block; margin-bottom: 10px; color: var(--primary);">ข้อมูลรุ่นการอบรม / ช่วงเวลาดำเนินโครงการ</label>
+              <div id="batches-list">
+                <!-- Dynamic rows of batches -->
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-add-batch" style="margin-top: 10px;">
+                <span class="material-icons-round" style="font-size:1.1rem; vertical-align:middle; margin-right:4px;">add</span> เพิ่มรุ่นอบรม
+              </button>
+            </div>
+
+            <!-- Hidden inputs to shorten modal and make save button fully visible -->
+            <input type="hidden" id="project-form-objective" value="">
+            <input type="hidden" id="project-form-desc" value="">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="btn-cancel-project-modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">บันทึกข้อมูล</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PROJECT DETAIL SHEET (DRILL DOWN & TAB CONTROLLERS) -->
+  <div class="modal" id="modal-project-detail">
+    <div class="modal-dialog large">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h3 id="detail-project-code" style="color:var(--primary); font-weight:700;">ASP-XXXX-DEPT-XXX</h3>
+            <h4 id="detail-project-name" style="margin-top:4px;">ชื่อโครงการจำลอง</h4>
+          </div>
+          <span class="close-btn material-icons-round" id="btn-close-detail-modal">close</span>
+        </div>
+        <div class="modal-body-wrapper">
+          
+          <!-- Detailed Sheet Tabs -->
+          <div class="detail-tab-row">
+            <button class="detail-tab-btn active" data-detail-tab="detail-tab-general">ข้อมูลทั่วไป</button>
+            <button class="detail-tab-btn" data-detail-tab="detail-tab-progress">บันทึกความก้าวหน้า</button>
+            <button class="detail-tab-btn" data-detail-tab="detail-tab-finance">การเงินแยกโครงการ</button>
+            <button class="detail-tab-btn" data-detail-tab="detail-tab-docs">เอกสารแนบ</button>
+          </div>
+
+          <!-- TAB: General Info -->
+          <div id="detail-tab-general" class="detail-tab-content active">
+            <div class="detail-split">
+              <div class="info-column">
+                <h4>รายละเอียดทางวิชาการ</h4>
+                <div class="info-group">
+                  <label>สาขาวิชา</label>
+                  <p id="det-general-dept">RAE</p>
+                </div>
+                <div class="info-group">
+                  <label>ประเภทโครงการ</label>
+                  <p id="det-general-type">บริการวิชาการ</p>
+                </div>
+                <div class="info-group">
+                  <label>ปีงบประมาณ</label>
+                  <p id="det-general-fy">2569</p>
+                </div>
+                <div class="info-group">
+                  <label>ผู้รับผิดชอบหลัก</label>
+                  <p id="det-general-responsible">ดร.ภาคภูมิ</p>
+                </div>
+                <div class="info-group">
+                  <label>ระยะเวลาดำเนินงาน</label>
+                  <p id="det-general-dates">01 มิ.ย. 2569 - 31 พ.ค. 2570</p>
+                </div>
+                <div class="info-group">
+                  <label>วัตถุประสงค์</label>
+                  <p id="det-general-objective">-</p>
+                </div>
+                <div class="info-group">
+                  <label>รายละเอียด</label>
+                  <p id="det-general-desc">-</p>
+                </div>
+              </div>
+              <div class="info-column bg-light-card">
+                <h4>ข้อมูลการเงินโครงการสะสม</h4>
+                <div class="info-group">
+                  <label>งบประมาณตามแผน</label>
+                  <p class="money-val" id="det-finance-planned">฿0</p>
+                </div>
+                <div class="info-group">
+                  <label>รายรับจริงสะสม</label>
+                  <p class="money-val text-success" id="det-finance-revenue">฿0</p>
+                </div>
+                <div class="info-group">
+                  <label>รายจ่ายจริงสะสม</label>
+                  <p class="money-val text-danger" id="det-finance-expense">฿0</p>
+                </div>
+                <div class="info-group">
+                  <label>กำไรสะสม</label>
+                  <p class="money-val text-primary" id="det-finance-profit">฿0</p>
+                </div>
+                <div class="info-group">
+                  <label>อัตรากำไรสะสม (%GP)</label>
+                  <p class="money-val" id="det-finance-gp">0%</p>
+                </div>
+                <div class="info-group">
+                  <label>สถานะโครงการปัจจุบัน</label>
+                  <span id="det-general-status" class="badge">In Progress</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Batches list in detail view -->
+            <div id="detail-general-batches-section" style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 15px; display: none;">
+              <h4 style="margin-bottom: 12px; color: var(--primary); font-weight: 600;">รุ่นการอบรม / ช่วงเวลาการดำเนินงานย่อย</h4>
+              <div class="table-responsive">
+                <table class="table table-bordered table-sm" style="font-size: 0.9rem;">
+                  <thead>
+                    <tr style="background-color: var(--bg-light);">
+                      <th>รุ่นการอบรม / หัวข้อย่อย</th>
+                      <th>ช่วงเวลาดำเนินงาน</th>
+                    </tr>
+                  </thead>
+                  <tbody id="detail-general-batches-body">
+                    <!-- Dynamic rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: Progress Logs -->
+          <div id="detail-tab-progress" class="detail-tab-content">
+            <div class="progress-split">
+              <!-- Add Progress Form (write access required) -->
+              <div class="progress-form-col manager-only">
+                <h4>บันทึกความก้าวหน้าโครงการใหม่</h4>
+                <form id="progress-log-form">
+                  <div class="form-row" style="margin-bottom: 12px;">
+                    <div class="form-group">
+                      <label for="prog-form-date">วันที่บันทึกความคืบหน้า</label>
+                      <input type="date" id="prog-form-date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="prog-form-pct">ความคืบหน้าโครงการ (%) <span class="required">*</span></label>
+                      <input type="number" id="prog-form-pct" class="form-control" required placeholder="0-100" min="0" max="100">
+                    </div>
+                  </div>
+                  
+                  <div class="form-row" style="margin-bottom: 12px;">
+                    <div class="form-group">
+                      <label for="prog-form-status">เปลี่ยนสถานะโครงการเป็น</label>
+                      <select id="prog-form-status" class="form-control">
+                        <option value="In Progress">In Progress (กำลังดำเนินงาน)</option>
+                        <option value="Completed">Completed (เสร็จสิ้น)</option>
+                        <option value="Delayed">Delayed (ล่าช้า)</option>
+                        <option value="Cancelled">Cancelled (ยกเลิก)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="prog-form-activity">กิจกรรมหลักที่กำลังดำเนินงาน</label>
+                      <input type="text" id="prog-form-activity" class="form-control" placeholder="เช่น การดำเนินงานลงทะเบียน">
+                    </div>
+                  </div>
+
+                  <div class="form-row" style="margin-bottom: 12px;">
+                    <div class="form-group">
+                      <label for="prog-form-problem">ปัญหาและอุปสรรคที่พบ</label>
+                      <input type="text" id="prog-form-problem" class="form-control" placeholder="ระบุปัญหา (ถ้ามี)">
+                    </div>
+                    <div class="form-group">
+                      <label for="prog-form-solution">แนวทางแก้ไขปัญหา</label>
+                      <input type="text" id="prog-form-solution" class="form-control" placeholder="แนวทางแก้ปัญหา (ถ้ามี)">
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="prog-form-next">งานที่จะทำในขั้นต่อไป</label>
+                      <input type="text" id="prog-form-next" class="form-control" placeholder="ขั้นตอนงานถัดไป">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:flex-end; justify-content:flex-end;">
+                      <button type="submit" class="btn btn-primary btn-block" style="height: 42px; margin-bottom: 0;">บันทึกความก้าวหน้า</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Progress Timeline History -->
+              <div class="progress-history-col">
+                <h4>ประวัติการรายงานความก้าวหน้าโครงการ</h4>
+                <div class="progress-timeline" id="progress-timeline-container">
+                  <!-- Rendered dynamically -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: Finance Transactions -->
+          <div id="detail-tab-finance" class="detail-tab-content">
+            <div class="finance-detail-section">
+              <div class="card-header">
+                <h4>ประวัติรายรับและรายจ่ายในโครงการนี้</h4>
+              </div>
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>ประเภท</th>
+                      <th>วันที่</th>
+                      <th>เลขที่ใบเสร็จ/สั่งจ่าย</th>
+                      <th>ประเภทรายการย่อย</th>
+                      <th>คำอธิบาย</th>
+                      <th>จำนวนเงิน</th>
+                    </tr>
+                  </thead>
+                  <tbody id="detail-finance-table-body">
+                    <!-- Dynamic -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: Documents upload and list -->
+          <div id="detail-tab-docs" class="detail-tab-content">
+            <div class="docs-split">
+              <!-- Upload Area -->
+              <div class="doc-upload-box manager-only">
+                <h4>อัปโหลดเอกสารประกอบโครงการ</h4>
+                <form id="doc-upload-form">
+                  <div class="form-group">
+                    <label for="doc-form-name">ชื่อเอกสารอ้างอิง <span class="required">*</span></label>
+                    <input type="text" id="doc-form-name" class="form-control" required placeholder="เช่น รายงานความก้าวหน้า หรือ ใบเสร็จรับเงิน">
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="doc-form-type">ประเภทไฟล์</label>
+                      <select id="doc-form-type" class="form-control">
+                        <option value="pdf" selected>PDF Document</option>
+                        <option value="word">Word Document</option>
+                        <option value="excel">Excel Document</option>
+                        <option value="image">Image File</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="doc-form-file">เลือกไฟล์จำลอง</label>
+                      <input type="text" id="doc-form-file" class="form-control" required placeholder="เช่น project_invoice.pdf">
+                    </div>
+                  </div>
+                  <button type="submit" class="btn btn-success btn-block">อัปโหลดไฟล์เข้าระบบ</button>
+                </form>
+              </div>
+
+              <!-- Uploaded Document List -->
+              <div class="doc-list-box">
+                <h4>เอกสารแนบโครงการทั้งหมด</h4>
+                <ul class="document-list" id="detail-doc-list-container">
+                  <!-- Rendered dynamically -->
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="btn-close-detail-modal-footer">ปิดหน้านี้</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD REVENUE TRANSACTION -->
+  <div class="modal" id="modal-revenue">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>บันทึกรายการรายรับโครงการ (Revenue)</h3>
+          <span class="close-btn material-icons-round" id="btn-close-revenue-modal">close</span>
+        </div>
+        <form id="revenue-form">
+          <input type="hidden" id="revenue-form-id">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="revenue-form-project">โครงการบริการวิชาการเป้าหมาย <span class="required">*</span></label>
+              <select id="revenue-form-project" class="form-control" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="revenue-form-date">วันที่ทำธุรกรรม <span class="required">*</span></label>
+                <input type="date" id="revenue-form-date" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label for="revenue-form-receipt">เลขที่ใบเสร็จรับเงิน <span class="required">*</span></label>
+                <input type="text" id="revenue-form-receipt" class="form-control" required placeholder="เช่น REC-69-001">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="revenue-form-type">ประเภทเงินรับโครงการ <span class="required">*</span></label>
+                <select id="revenue-form-type" class="form-control" required>
+                  <option value="Contract Payment" selected>เงินงวดจ้างทำของ (Contract Payment)</option>
+                  <option value="Registration Fee">ค่าลงทะเบียนเข้าร่วม (Registration Fee)</option>
+                  <option value="Government Support">เงินสนับสนุนจากรัฐ (Government Support)</option>
+                  <option value="Other Revenue">รายรับส่วนอื่น ๆ (Other Revenue)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="revenue-form-amount">จำนวนเงินรายรับ (บาท) <span class="required">*</span></label>
+                <input type="number" id="revenue-form-amount" class="form-control" required placeholder="เช่น 100000" min="0" step="0.01">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="revenue-form-desc">คำอธิบายรายการธุรกรรม</label>
+              <input type="text" id="revenue-form-desc" class="form-control" placeholder="เช่น เงินกวดงวดแรก โครงการ 7-11">
+            </div>
+
+            <div class="form-group">
+              <label for="revenue-form-remark">หมายเหตุ</label>
+              <input type="text" id="revenue-form-remark" class="form-control" placeholder="ระบุหมายเหตุอื่น ๆ">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="btn-cancel-revenue-modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-success">บันทึกรายรับ</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD EXPENSE TRANSACTION -->
+  <div class="modal" id="modal-expense">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>บันทึกรายการรายจ่ายโครงการ (Expense)</h3>
+          <span class="close-btn material-icons-round" id="btn-close-expense-modal">close</span>
+        </div>
+        <form id="expense-form">
+          <input type="hidden" id="expense-form-id">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="expense-form-project">โครงการบริการวิชาการเป้าหมาย <span class="required">*</span></label>
+              <select id="expense-form-project" class="form-control" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="expense-form-date">วันที่จ่ายเงินจริง <span class="required">*</span></label>
+                <input type="date" id="expense-form-date" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label for="expense-form-number">เลขที่ใบขออนุมัติเบิกจ่าย <span class="required">*</span></label>
+                <input type="text" id="expense-form-number" class="form-control" required placeholder="เช่น EXP-69-001">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="expense-form-type">หมวดหมู่รายจ่ายโครงการ <span class="required">*</span></label>
+                <select id="expense-form-type" class="form-control" required>
+                  <option value="Materials" selected>ค่าวัสดุและอุปกรณ์สิ้นเปลือง (Materials)</option>
+                  <option value="Equipment">ค่าคุรุภัณฑ์จัดซื้อจำลอง (Equipment)</option>
+                  <option value="Speaker Fee">ค่าสมนาคุณวิทยากร (Speaker Fee)</option>
+                  <option value="Food & Beverage">ค่าจัดอาหารและเครื่องดื่ม (Food & Beverage)</option>
+                  <option value="Travel">ค่าพาหนะเดินทาง (Travel)</option>
+                  <option value="Accommodation">ค่าห้องพักผู้จัดอบรม (Accommodation)</option>
+                  <option value="Printing">ค่าพิมพ์และผลิตหนังสือ (Printing)</option>
+                  <option value="Other Expenses">ค่าใช้จ่ายเบ็ดเตล็ดอื่น ๆ (Other Expenses)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="expense-form-amount">จำนวนเงินจ่ายจริง (บาท) <span class="required">*</span></label>
+                <input type="number" id="expense-form-amount" class="form-control" required placeholder="เช่น 50000" min="0" step="0.01">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="expense-form-desc">รายละเอียดรายการธุรกรรม</label>
+              <input type="text" id="expense-form-desc" class="form-control" placeholder="เช่น ซื้อวัสดุและสายเคเบิลหุ่นยนต์">
+            </div>
+
+            <div class="form-group">
+              <label for="expense-form-remark">หมายเหตุ</label>
+              <input type="text" id="expense-form-remark" class="form-control" placeholder="ระบุหมายเหตุอื่น ๆ">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="btn-cancel-expense-modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-danger">บันทึกรายจ่าย</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD/EDIT USER -->
+  <div class="modal" id="modal-user">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-user-title">เพิ่มผู้ใช้งานระบบใหม่</h3>
+          <span class="close-btn material-icons-round" id="btn-close-user-modal">close</span>
+        </div>
+        <form id="user-form">
+          <input type="hidden" id="user-form-id">
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="user-form-empid">รหัสพนักงาน <span class="required">*</span></label>
+                <input type="text" id="user-form-empid" class="form-control" required placeholder="เช่น EMP-101">
+              </div>
+              <div class="form-group">
+                <label for="user-form-name">ชื่อ-นามสกุล <span class="required">*</span></label>
+                <input type="text" id="user-form-name" class="form-control" required placeholder="เช่น อ.กฤษณะ สมใจ">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="user-form-username">ชื่อผู้ใช้ (Username) <span class="required">*</span></label>
+                <input type="text" id="user-form-username" class="form-control" required placeholder="ใช้ล็อกอินระบบ">
+              </div>
+              <div class="form-group">
+                <label for="user-form-password">รหัสผ่าน (Password)</label>
+                <input type="password" id="user-form-password" class="form-control" placeholder="ทิ้งว่างเพื่อใช้รหัสเริ่มต้น (password123)">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="user-form-role">ระดับสิทธิ์ / บทบาท <span class="required">*</span></label>
+                <select id="user-form-role" class="form-control" required>
+                  <option value="Department Admin" selected>แอดมินสาขาวิชา (Department Admin)</option>
+                  <option value="Dean">คณบดี (Dean)</option>
+                  <option value="Assistant Dean">ผู้ช่วยคณบดีฝ่ายวิชาการและวิจัย (Assistant Dean)</option>
+                </select>
+              </div>
+              <div class="form-group" id="user-form-dept-group">
+                <label for="user-form-dept">สาขาวิชาที่สังกัด</label>
+                <select id="user-form-dept" class="form-control">
+                  <option value="">ส่วนกลาง / ไม่สังกัดสาขา</option>
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="user-form-email">อีเมล</label>
+                <input type="email" id="user-form-email" class="form-control" placeholder="example@tu.ac.th">
+              </div>
+              <div class="form-group">
+                <label for="user-form-phone">เบอร์โทรศัพท์</label>
+                <input type="text" id="user-form-phone" class="form-control" placeholder="08XXXXXXXX">
+              </div>
+            </div>
+
+            <div class="form-group" id="user-form-status-group" style="display:none;">
+              <label for="user-form-status">สถานะผู้ใช้งาน</label>
+              <select id="user-form-status" class="form-control">
+                <option value="Active">Active (เปิดใช้งาน)</option>
+                <option value="Inactive">Inactive (ระงับการใช้งาน)</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="btn-cancel-user-modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">บันทึกผู้ใช้</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT KPI TARGETS GRID -->
+  <div class="modal" id="modal-kpi-targets">
+    <div class="modal-dialog large">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>ปรับแต่งเป้าหมาย KPI ประจำปีงบประมาณ</h3>
+          <span class="close-btn material-icons-round" id="btn-close-kpi-modal">close</span>
+        </div>
+        <form id="kpi-targets-form">
+          <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            <p style="margin-bottom:15px; color:#555;">กำหนดเป้าหมาย KPI ตามรายสาขาวิชาของคณะวิศวกรรมศาสตร์:</p>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>สาขา</th>
+                  <th>เป้าหมายจำนวนโครงการ</th>
+                  <th>เป้าหมายงบประมาณแผน (฿)</th>
+                  <th>เป้าหมายรายรับคลาดหวัง (฿)</th>
+                  <th>เป้าหมายรายจ่ายคาดหวัง (฿)</th>
+                  <th>เป้าหมายกำไร (฿)</th>
+                </tr>
+              </thead>
+              <tbody id="kpi-edit-form-body">
+                <!-- Dynamically render rows for all 8 departments -->
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="btn-cancel-kpi-modal">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">บันทึกการตั้งค่า KPI</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Javascript Scripts (Direct load for portability) -->
+  <script src="db.js"></script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
